@@ -1,0 +1,19 @@
+# Add-Ons Architecture Audit (`ADDONS_AUDIT.md`)
+
+## 1. Current Baseline Assessment
+
+- **Existing Capabilities**: As documented in `AUDIT.md`, the imported codebase is a single-file `index.html` using native `window.speechSynthesis` wrapped by a minimal Express static server (`server.js`).
+- **Missing Foundations**: There is currently no `TtsProvider` abstraction, no Web Audio buffer scheduler, no Web Worker pipeline, no server API endpoints (`/api/extract`, `/api/tts`), no IndexedDB layer, and no feature-flag registry.
+- **Migration Sequence**: Core Phases 1–6 (React + TypeScript + Vite, hardened `TtsEngine`, `DESIGN.md` UI, WCAG 2.2 AA, PWA) must establish the foundation first so add-ons plug cleanly into `TtsProvider` and lazy importer interfaces without bloating the initial bundle.
+
+## 2. Conflicts & Integration Risks
+
+| Risk ID | Area | Conflict / Risk | Mitigation Strategy |
+|---|---|---|---|
+| ADD-01 | **Bundle Budget (< 120 KB gzip)** | `kokoro-js` (Transformers.js + ONNX Runtime), `@mintplex-labs/piper-tts-web`, `pdfjs-dist`, `tesseract.js`, `mammoth`, and `epubjs` are multi-megabyte dependencies. Eagerly importing any of them blows past the 120 KB initial JS target. | Enforce strict dynamic `import()` boundaries behind `src/config/features.ts` flags; isolate Kokoro and Piper inside dedicated Web Workers (`new Worker(..., { type: 'module' })`). |
+| ADD-02 | **COOP/COEP vs Third-Party Assets** | Multi-threaded WASM (`SharedArrayBuffer`) for Kokoro requires `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp`, which blocks cross-origin fonts, images, and un-CORPed scripts. | Self-host all fonts (`@fontsource/inter`, `@fontsource/literata`, `@fontsource/opendyslexic`) and icons/assets locally; apply COOP/COEP headers consistently in Vite dev, Express (`server.js`), and `vercel.json`. |
+| ADD-03 | **SSRF in `/api/extract`** | Fetching arbitrary user-submitted URLs on the backend risks Server-Side Request Forgery against internal/metadata IPs (`127.0.0.0/8`, `10/8`, `172.16/12`, `192.168/16`, `169.254/16`, `::1`, `fc00::/7`) or DNS rebinding. | Resolve DNS (`dns.lookup(..., { all: true })`), reject any private/reserved CIDR before connecting, validate each redirect hop (max 3), cap body at 5 MB, enforce 8s timeout, require `text/html`, and apply per-IP rate limiting. |
+| ADD-04 | **Piper License & Asset Bundling** | Maintained Piper (`OHF-Voice/piper1-gpl`) is GPL-3.0 while archived `rhasspy/piper` is MIT, and individual voice models carry mixed licenses (CC-BY, MIT, etc.). Also requires ONNX/phonemizer WASM files in `/public`. | Keep `PiperProvider` disabled by default (`features.piper = false`), display per-voice license notices in UI and `THIRD_PARTY_LICENSES.md`, and configure `vite-plugin-static-copy` for runtime WASM assets. |
+| ADD-05 | **Audio Export Honesty** | Native `speechSynthesis` cannot capture audio streams into WAV/MP3. Fake export buttons violate `DESIGN.md`. | Expose WAV export ONLY when `provider.capabilities.exportAudio === true` (Kokoro, Piper, Remote); show a disabled state with explicit tooltip *"Browsers can't export system voices"* for Web Speech. |
+| ADD-06 | **Preview vs Vercel Parity** | AI Studio preview serves via Express (`server.js` on port 3000), whereas production deployment targets Vercel serverless functions (`/api/*`). | Put shared SSRF-safe extraction and TTS proxy logic in reusable server modules mounted by both Express (`server.js`) and Vercel handlers (`api/extract.ts`, `api/tts.ts`, `api/summarize.ts`). |
+| ADD-07 | **Privacy & Opt-In Network Calls** | Add-ons introduce network requests (Kokoro model fetch from Hugging Face, Remote OpenAI server, URL extraction, optional Supabase/Claude). | Keep privacy default strictly local (`WebSpeechProvider`); show clear download size/network confirmation modals before fetching models or sending text externally; keep Phase H (Supabase/Claude) feature-flagged OFF. |

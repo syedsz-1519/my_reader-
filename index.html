@@ -1,0 +1,1074 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TTS Reader</title>
+
+  <!-- Google Fonts: Instrument Serif (display) + IBM Plex Mono (code/labels) + Lato (body) -->
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet" />
+
+  <style>
+    /* =====================================================
+       CSS VARIABLES — change these to retheme the whole page
+       ===================================================== */
+    :root {
+      --bg:         #f5f0e8;       /* warm parchment background */
+      --surface:    #fffdf8;       /* card/input background     */
+      --border:     #e0d8c8;       /* subtle borders            */
+      --text:       #2c2416;       /* main text color           */
+      --muted:      #8a7d68;       /* secondary / label text    */
+      --accent:     #c05c1a;       /* orange-rust accent        */
+      --accent-dim: rgba(192,92,26,0.12);
+      --highlight:  #fde68a;       /* word-highlight yellow     */
+      --radius:     6px;
+      --shadow:     0 2px 16px rgba(0,0,0,0.07);
+    }
+
+    /* =====================================================
+       RESET & BASE
+       ===================================================== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Lato', sans-serif;
+      font-weight: 300;
+      line-height: 1.8;
+      min-height: 100vh;
+      padding: 2rem 1rem 4rem;
+    }
+
+    /* =====================================================
+       LAYOUT WRAPPER
+       ===================================================== */
+    .container {
+      max-width: 760px;
+      margin: 0 auto;
+    }
+
+    /* =====================================================
+       HEADER
+       ===================================================== */
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+      animation: fadeUp 0.5s ease both;
+    }
+
+    .logo-tag {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--accent);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .logo-tag::before,
+    .logo-tag::after {
+      content: '—';
+      color: var(--border);
+    }
+
+    h1 {
+      font-family: 'Instrument Serif', serif;
+      font-size: clamp(2rem, 5vw, 3rem);
+      font-weight: 400;
+      line-height: 1.1;
+      color: var(--text);
+    }
+
+    h1 em {
+      font-style: italic;
+      color: var(--accent);
+    }
+
+    .subtitle {
+      margin-top: 0.6rem;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    /* =====================================================
+       READING PANEL — the main card
+       ===================================================== */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      animation: fadeUp 0.6s ease 0.1s both;
+    }
+
+    /* Top toolbar inside the panel */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.85rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+
+    .toolbar-label {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    /* Status badge — shows IDLE / READING / PAUSED */
+    .status-badge {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.6rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 0.25rem 0.75rem;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      background: transparent;
+      transition: all 0.3s;
+    }
+
+    /* status changes via JS — these classes get added to the badge */
+    .status-badge.reading {
+      color: var(--accent);
+      border-color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    .status-badge.paused {
+      color: #b07d10;
+      border-color: #e5b432;
+      background: rgba(229,180,50,0.1);
+    }
+
+    /* =====================================================
+       TEXT DISPLAY AREA — where reading text lives
+       ===================================================== */
+    .text-display {
+      padding: 2rem 2.5rem;
+      font-size: 1.05rem;
+      line-height: 1.9;
+      min-height: 260px;
+      color: var(--text);
+      outline: none;
+    }
+
+    /* Each word gets wrapped in a <span> by JavaScript */
+    .word {
+      cursor: pointer;
+      border-radius: 2px;
+      padding: 0 1px;
+      transition: background 0.15s;
+    }
+
+    .word:hover {
+      background: var(--accent-dim);
+    }
+
+    /* The currently spoken word gets this class via JS */
+    .word.active {
+      background: var(--highlight);
+      color: #7c4a00;
+    }
+
+    /* =====================================================
+       CONTROLS BAR
+       ===================================================== */
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 1.25rem 2rem;
+      border-top: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+
+    /* Icon buttons (play, pause, stop, skip) */
+    .btn-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+
+    .btn-icon:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    /* Main play button is bigger */
+    .btn-play {
+      width: 52px;
+      height: 52px;
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .btn-play:hover {
+      background: #a34d14;
+      border-color: #a34d14;
+      color: #fff;
+    }
+
+    /* Progress bar */
+    .progress-wrap {
+      flex: 1;
+      min-width: 120px;
+    }
+
+    .progress-label {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.6rem;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      margin-bottom: 0.3rem;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    progress {
+      width: 100%;
+      height: 4px;
+      appearance: none;
+      border: none;
+      border-radius: 4px;
+      background: var(--border);
+    }
+
+    progress::-webkit-progress-bar   { background: var(--border); border-radius: 4px; }
+    progress::-webkit-progress-value { background: var(--accent); border-radius: 4px; }
+    progress::-moz-progress-bar      { background: var(--accent); border-radius: 4px; }
+
+    /* =====================================================
+       SETTINGS PANEL — speed, pitch, voice
+       ===================================================== */
+    .settings {
+      padding: 1.5rem 2rem;
+      border-top: 1px solid var(--border);
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1.25rem;
+      background: var(--bg);
+      animation: fadeUp 0.6s ease 0.2s both;
+    }
+
+    .setting-group label {
+      display: block;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.62rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+    }
+
+    .setting-group input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    .setting-group select {
+      width: 100%;
+      padding: 0.45rem 0.75rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-family: 'Lato', sans-serif;
+      font-size: 0.85rem;
+      color: var(--text);
+      cursor: pointer;
+      outline: none;
+    }
+
+    .setting-group select:focus {
+      border-color: var(--accent);
+    }
+
+    .settings-note {
+      grid-column: 1 / -1;
+      color: var(--muted);
+      font-size: 0.8rem;
+      line-height: 1.5;
+    }
+
+    .range-value {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--accent);
+      float: right;
+    }
+
+    /* =====================================================
+       TEXT INPUT SECTION — paste/type your own text
+       ===================================================== */
+    .input-section {
+      margin-top: 1.5rem;
+      animation: fadeUp 0.6s ease 0.3s both;
+    }
+
+    .input-section h2 {
+      font-family: 'Instrument Serif', serif;
+      font-size: 1.3rem;
+      font-weight: 400;
+      margin-bottom: 0.75rem;
+      color: var(--text);
+    }
+
+    textarea {
+      width: 100%;
+      height: 140px;
+      padding: 1rem 1.25rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-family: 'Lato', sans-serif;
+      font-size: 0.95rem;
+      line-height: 1.7;
+      color: var(--text);
+      resize: vertical;
+      outline: none;
+      box-shadow: var(--shadow);
+      transition: border-color 0.2s;
+    }
+
+    textarea:focus {
+      border-color: var(--accent);
+    }
+
+    .input-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-top: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .file-input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .file-input:focus-visible + .btn-text {
+      outline: 2px solid var(--accent);
+      outline-offset: 3px;
+    }
+
+    .btn-text {
+      padding: 0.6rem 1.5rem;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all 0.2s;
+      background: var(--surface);
+      color: var(--muted);
+    }
+
+    .btn-text:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .btn-text.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .btn-text.primary:hover {
+      background: #a34d14;
+    }
+
+    /* =====================================================
+       KEYBOARD SHORTCUTS GUIDE
+       ===================================================== */
+    .shortcuts {
+      margin-top: 2rem;
+      padding: 1.25rem 1.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      animation: fadeUp 0.6s ease 0.4s both;
+    }
+
+    .shortcuts h3 {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 1rem;
+    }
+
+    .shortcut-list {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .shortcut {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    kbd {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.65rem;
+      padding: 0.15rem 0.5rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      color: var(--text);
+    }
+
+    /* =====================================================
+       ANIMATION KEYFRAMES
+       ===================================================== */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(14px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* =====================================================
+       SVG ICONS (inline) — no extra library needed
+       ===================================================== */
+    svg { display: block; }
+
+  </style>
+</head>
+<body>
+
+  <div class="container">
+
+    <!-- ── Header ── -->
+    <header>
+      <div class="logo-tag">Web Speech API</div>
+      <h1>Listen to <em>anything</em>.</h1>
+      <p class="subtitle">Paste your notes, articles, or research — press play.</p>
+    </header>
+
+    <!-- ── Main Reading Panel ── -->
+    <div class="panel">
+
+      <!-- Toolbar row -->
+      <div class="toolbar">
+        <span class="toolbar-label">Reading View</span>
+        <!-- Status badge — JS will add .reading or .paused class -->
+        <span class="status-badge" id="statusBadge">Idle</span>
+      </div>
+
+      <!-- The text that will be read aloud -->
+      <!-- JS will split this into word <span>s so we can highlight each word -->
+      <div class="text-display" id="textDisplay">
+        Deep learning is a subset of machine learning that uses neural networks with many layers.
+        These layers learn representations of data with increasing levels of abstraction.
+        The key breakthrough came with the availability of large datasets and powerful GPUs.
+        Today, deep learning powers image recognition, natural language processing, speech synthesis, and much more.
+        The architecture of a neural network consists of an input layer, hidden layers, and an output layer.
+        Each neuron applies a weighted sum followed by a non-linear activation function.
+        Training is done via backpropagation, where gradients flow backward through the network to update weights.
+      </div>
+
+      <!-- Playback Controls -->
+      <div class="controls">
+
+        <!-- Restart button -->
+        <button class="btn-icon" id="btnRestart" title="Restart (R)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="1 4 1 10 7 10"></polyline>
+            <path d="M3.51 15a9 9 0 1 0 .49-4.51"></path>
+          </svg>
+        </button>
+
+        <!-- Play / Pause button — the icon swaps via JS -->
+        <button class="btn-icon btn-play" id="btnPlay" title="Play/Pause (Space)">
+          <!-- Play icon (default) -->
+          <svg id="iconPlay" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <polygon points="5,3 19,12 5,21"></polygon>
+          </svg>
+          <!-- Pause icon (hidden by default) -->
+          <svg id="iconPause" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="display:none">
+            <rect x="6" y="4" width="4" height="16"></rect>
+            <rect x="14" y="4" width="4" height="16"></rect>
+          </svg>
+        </button>
+
+        <!-- Stop button -->
+        <button class="btn-icon" id="btnStop" title="Stop (S)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+          </svg>
+        </button>
+
+        <!-- Progress bar -->
+        <div class="progress-wrap">
+          <div class="progress-label">
+            <span>Progress</span>
+            <span id="progressText">0 / 0 words</span>
+          </div>
+          <progress id="progressBar" value="0" max="100"></progress>
+        </div>
+
+      </div>
+
+      <!-- Settings row -->
+      <div class="settings">
+
+        <!-- Speed slider -->
+        <div class="setting-group">
+          <label>
+            Speed
+            <span class="range-value" id="speedVal">1.0×</span>
+          </label>
+          <input type="range" id="speedSlider" min="0.5" max="2" step="0.1" value="1.0" />
+        </div>
+
+        <!-- Pitch slider -->
+        <div class="setting-group">
+          <label>
+            Pitch
+            <span class="range-value" id="pitchVal">1.0</span>
+          </label>
+          <input type="range" id="pitchSlider" min="0.5" max="2" step="0.1" value="1.0" />
+        </div>
+
+        <div class="setting-group">
+          <label for="languageSelect">Reading language</label>
+          <select id="languageSelect">
+            <option value="en">English</option>
+            <option value="hi">Hindi</option>
+            <option value="hinglish">Hinglish (Roman Hindi)</option>
+            <option value="te">Telugu</option>
+            <option value="teglish">Teglish (Roman Telugu)</option>
+            <option value="ur">Urdu</option>
+            <option value="roman-ur">Roman Urdu</option>
+            <option value="ar">Arabic</option>
+          </select>
+        </div>
+
+        <div class="setting-group">
+          <label for="voiceSelect">Device voice</label>
+          <select id="voiceSelect">
+            <option value="">Loading voices…</option>
+          </select>
+        </div>
+
+        <p class="settings-note" id="voiceAvailability" role="status" aria-live="polite">
+          Voices are provided by your device or browser. Text translation is not included.
+        </p>
+
+      </div>
+
+    </div><!-- end .panel -->
+
+
+    <!-- ── Paste Your Own Text ── -->
+    <div class="input-section">
+      <h2>Use your own text</h2>
+      <textarea id="userText" placeholder="Paste your notes, an article, or any text here…"></textarea>
+      <div class="input-actions">
+        <input class="file-input" type="file" id="fileInput" accept=".txt,text/plain" />
+        <label class="btn-text" for="fileInput">Open .txt file</label>
+        <button class="btn-text primary" id="btnLoad">Load &amp; Read</button>
+        <button class="btn-text" id="btnClear">Clear</button>
+      </div>
+    </div>
+
+    <!-- ── Keyboard Shortcuts ── -->
+    <div class="shortcuts">
+      <h3>Keyboard Shortcuts</h3>
+      <div class="shortcut-list">
+        <div class="shortcut"><kbd>Space</kbd> Play / Pause</div>
+        <div class="shortcut"><kbd>S</kbd> Stop</div>
+        <div class="shortcut"><kbd>R</kbd> Restart</div>
+        <div class="shortcut"><kbd>↑</kbd> Speed up</div>
+        <div class="shortcut"><kbd>↓</kbd> Slow down</div>
+      </div>
+    </div>
+
+  </div><!-- end .container -->
+
+
+  <!-- =====================================================
+       JAVASCRIPT — All the TTS logic
+       ===================================================== -->
+  <script>
+
+    // ── 1. Grab all the elements we need ──────────────────
+    const textDisplay  = document.getElementById('textDisplay');
+    const btnPlay      = document.getElementById('btnPlay');
+    const btnStop      = document.getElementById('btnStop');
+    const btnRestart   = document.getElementById('btnRestart');
+    const iconPlay     = document.getElementById('iconPlay');
+    const iconPause    = document.getElementById('iconPause');
+    const statusBadge  = document.getElementById('statusBadge');
+    const progressBar  = document.getElementById('progressBar');
+    const progressText = document.getElementById('progressText');
+    const speedSlider  = document.getElementById('speedSlider');
+    const pitchSlider  = document.getElementById('pitchSlider');
+    const speedVal     = document.getElementById('speedVal');
+    const pitchVal     = document.getElementById('pitchVal');
+    const languageSelect = document.getElementById('languageSelect');
+    const voiceSelect  = document.getElementById('voiceSelect');
+    const voiceAvailability = document.getElementById('voiceAvailability');
+    const userText     = document.getElementById('userText');
+    const btnLoad      = document.getElementById('btnLoad');
+    const btnClear     = document.getElementById('btnClear');
+    const fileInput    = document.getElementById('fileInput');
+
+
+    // ── 2. State variables ────────────────────────────────
+    const STORAGE_KEY = 'tts-reader-state';
+    const READING_LANGUAGES = {
+      en: { name: 'English', speechLang: 'en-US', voiceLang: 'en' },
+      hi: { name: 'Hindi', speechLang: 'hi-IN', voiceLang: 'hi' },
+      hinglish: { name: 'Hinglish', speechLang: 'hi-IN', voiceLang: 'hi' },
+      te: { name: 'Telugu', speechLang: 'te-IN', voiceLang: 'te' },
+      teglish: { name: 'Teglish', speechLang: 'te-IN', voiceLang: 'te' },
+      ur: { name: 'Urdu', speechLang: 'ur-PK', voiceLang: 'ur' },
+      'roman-ur': { name: 'Roman Urdu', speechLang: 'ur-PK', voiceLang: 'ur' },
+      ar: { name: 'Arabic', speechLang: 'ar-SA', voiceLang: 'ar' }
+    };
+    const WORDS_PER_CHUNK = 40;
+    const CHARACTERS_PER_CHUNK = 180;
+    let words       = [];       // array of all word elements in textDisplay
+    let currentWord = 0;        // index of the word currently being spoken
+    let isPlaying   = false;    // are we currently speaking?
+    let utterance   = null;     // the SpeechSynthesisUtterance object
+    let voices      = [];       // available voices from the browser
+    let speechSession = 0;
+    let savedVoiceURI = '';
+
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          draftText: userText.value,
+          activeText: textDisplay.innerText,
+          speed: speedSlider.value,
+          pitch: pitchSlider.value,
+          language: languageSelect.value,
+          voiceURI: voiceSelect.value || savedVoiceURI
+        }));
+      } catch (error) {
+        console.warn('Unable to save reader settings:', error);
+      }
+    }
+
+    function restoreState() {
+      try {
+        const savedState = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+        if (!savedState) return;
+
+        if (typeof savedState.draftText === 'string') userText.value = savedState.draftText;
+        if (typeof savedState.activeText === 'string' && savedState.activeText.trim()) {
+          textDisplay.textContent = savedState.activeText;
+        }
+        if (Number.isFinite(Number(savedState.speed)) && Number(savedState.speed) >= 0.5 && Number(savedState.speed) <= 2) {
+          speedSlider.value = savedState.speed;
+          speedVal.textContent = parseFloat(savedState.speed).toFixed(1) + '×';
+        }
+        if (Number.isFinite(Number(savedState.pitch)) && Number(savedState.pitch) >= 0.5 && Number(savedState.pitch) <= 2) {
+          pitchSlider.value = savedState.pitch;
+          pitchVal.textContent = parseFloat(savedState.pitch).toFixed(1);
+        }
+        if (typeof savedState.voiceURI === 'string') savedVoiceURI = savedState.voiceURI;
+        if (typeof savedState.language === 'string' && READING_LANGUAGES[savedState.language]) {
+          languageSelect.value = savedState.language;
+        }
+      } catch (error) {
+        console.warn('Unable to restore reader settings:', error);
+      }
+    }
+
+    restoreState();
+
+
+    // ── 3. Split text into word <span>s ──────────────────
+    // We take the raw text, split by spaces, wrap each word in a <span class="word">
+    // so JavaScript can highlight each word as it's spoken.
+    function buildWordSpans() {
+      const tokens = textDisplay.textContent.trim().split(/\s+/).filter(Boolean);
+      const fragment = document.createDocumentFragment();
+
+      tokens.forEach((word, index) => {
+        if (index > 0) fragment.append(' ');
+        const span = document.createElement('span');
+        span.className = 'word';
+        span.dataset.index = index;
+        span.textContent = word;
+        span.addEventListener('click', () => seekToWord(index));
+        fragment.append(span);
+      });
+
+      textDisplay.replaceChildren(fragment);
+      words = Array.from(textDisplay.querySelectorAll('.word'));
+
+      // Update progress display
+      progressBar.max  = words.length;
+      progressText.textContent = `0 / ${words.length} words`;
+    }
+
+
+    // ── 4. Load available voices ──────────────────────────
+    // The browser loads voices asynchronously, so we listen for the event.
+    function loadVoices() {
+      voices = window.speechSynthesis.getVoices();
+      updateVoiceOptions();
+    }
+
+    function updateVoiceOptions() {
+      const language = READING_LANGUAGES[languageSelect.value];
+      const matchingVoices = voices.filter((voice) =>
+        voice.lang.replace('_', '-').toLowerCase().split('-')[0] === language.voiceLang
+      );
+      const preferredVoice = matchingVoices.find((voice) => voice.voiceURI === savedVoiceURI)
+        || matchingVoices.find((voice) => voice.default)
+        || matchingVoices[0];
+
+      voiceSelect.replaceChildren();
+      if (matchingVoices.length === 0) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'No matching device voice';
+        voiceSelect.append(option);
+        voiceAvailability.textContent =
+          `No ${language.name} voice was detected. Add a ${language.name} speech voice in your device settings; your browser may use its default voice meanwhile.`;
+        savedVoiceURI = '';
+        return;
+      }
+
+      matchingVoices.forEach((voice) => {
+        const option = document.createElement('option');
+        option.value = voice.voiceURI;
+        option.textContent = `${voice.name} (${voice.lang})${voice.default ? ' — default' : ''}`;
+        voiceSelect.append(option);
+      });
+      voiceSelect.value = preferredVoice.voiceURI;
+      savedVoiceURI = preferredVoice.voiceURI;
+
+      const scriptNote = ['hinglish', 'teglish', 'roman-ur'].includes(languageSelect.value)
+        ? ` ${language.name} uses a ${language.name === 'Hinglish' ? 'Hindi' : language.name === 'Teglish' ? 'Telugu' : 'Urdu'} voice; Roman-script pronunciation depends on your device.`
+        : '';
+      voiceAvailability.textContent =
+        `${matchingVoices.length} ${language.name} device voice${matchingVoices.length === 1 ? '' : 's'} available. Voice quality depends on your device.${scriptNote} Text translation is not included.`;
+    }
+
+    // This event fires when voices are ready
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+    loadVoices(); // also try immediately (works in Firefox)
+
+
+    // ── 5. Highlight the active word ─────────────────────
+    function highlightWord(index) {
+      // Remove highlight from all words
+      words.forEach(w => w.classList.remove('active'));
+
+      // Add highlight to current word
+      if (words[index]) {
+        words[index].classList.add('active');
+
+        // Scroll the word into view smoothly
+        words[index].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+
+      // Update progress bar and label
+      currentWord = index;
+      progressBar.value = index;
+      progressText.textContent = `${index} / ${words.length} words`;
+    }
+
+
+    // ── 6. Update the status badge ────────────────────────
+    function setStatus(state) {
+      // state: 'idle' | 'reading' | 'paused'
+      statusBadge.textContent = state.charAt(0).toUpperCase() + state.slice(1);
+      statusBadge.className   = 'status-badge ' + (state !== 'idle' ? state : '');
+    }
+
+
+    // ── 7. Speak from a given word index ─────────────────
+    function speakFrom(startIndex) {
+      speechSession += 1;
+      const session = speechSession;
+      window.speechSynthesis.cancel();
+      speakChunk(startIndex, session);
+    }
+
+    function speakChunk(startIndex, session) {
+      if (session !== speechSession) return;
+
+      let chunkEnd = startIndex;
+      let chunkLength = 0;
+      while (chunkEnd < words.length && chunkEnd - startIndex < WORDS_PER_CHUNK) {
+        const nextLength = words[chunkEnd].textContent.length + (chunkEnd > startIndex ? 1 : 0);
+        if (chunkEnd > startIndex && chunkLength + nextLength > CHARACTERS_PER_CHUNK) break;
+        chunkLength += nextLength;
+        chunkEnd += 1;
+      }
+      const chunkWords = words.slice(startIndex, chunkEnd);
+      const textToSpeak = chunkWords.map((word) => word.textContent).join(' ');
+      if (!textToSpeak.trim()) {
+        finishSpeech(session);
+        return;
+      }
+
+      utterance = new SpeechSynthesisUtterance(textToSpeak);
+      utterance.rate  = parseFloat(speedSlider.value);
+      utterance.pitch = parseFloat(pitchSlider.value);
+      utterance.lang = READING_LANGUAGES[languageSelect.value].speechLang;
+
+      const selectedVoice = voices.find((voice) => voice.voiceURI === voiceSelect.value);
+      if (selectedVoice) utterance.voice = selectedVoice;
+
+      utterance.onboundary = (event) => {
+        if (session === speechSession && event.name === 'word') {
+          const spokenText = textToSpeak.substring(0, event.charIndex);
+          const spokenWordCount = spokenText.trim().split(/\s+/).filter(Boolean).length;
+          highlightWord(Math.min(startIndex + spokenWordCount, chunkEnd - 1));
+        }
+      };
+
+      utterance.onend = () => {
+        if (session !== speechSession) return;
+        if (chunkEnd < words.length) {
+          speakChunk(chunkEnd, session);
+        } else {
+          finishSpeech(session);
+        }
+      };
+
+      utterance.onerror = (e) => {
+        if (session !== speechSession || e.error === 'interrupted') return;
+        console.error('Speech error:', e.error);
+        setStatus('idle');
+        isPlaying = false;
+        showPlayIcon();
+      };
+
+      window.speechSynthesis.speak(utterance);
+      isPlaying = true;
+      setStatus('reading');
+      showPauseIcon();
+    }
+
+    function finishSpeech(session) {
+      if (session !== speechSession) return;
+      isPlaying = false;
+      setStatus('idle');
+      showPlayIcon();
+      setTimeout(() => {
+        if (session !== speechSession) return;
+        words.forEach((word) => word.classList.remove('active'));
+        progressBar.value = words.length;
+        progressText.textContent = `${words.length} / ${words.length} words`;
+      }, 600);
+    }
+
+
+    // ── 8. Play / Pause toggle ────────────────────────────
+    function togglePlay() {
+      if (words.length === 0) buildWordSpans();
+
+      if (!isPlaying) {
+        // If we were paused, resume; otherwise start fresh
+        if (window.speechSynthesis.paused) {
+          window.speechSynthesis.resume();
+          isPlaying = true;
+          setStatus('reading');
+          showPauseIcon();
+        } else {
+          speakFrom(currentWord);
+        }
+      } else {
+        // Pause speech
+        window.speechSynthesis.pause();
+        isPlaying = false;
+        setStatus('paused');
+        showPlayIcon();
+      }
+    }
+
+
+    // ── 9. Stop ───────────────────────────────────────────
+    function stopSpeech() {
+      speechSession += 1;
+      window.speechSynthesis.cancel();
+      isPlaying   = false;
+      currentWord = 0;
+      setStatus('idle');
+      showPlayIcon();
+      words.forEach(w => w.classList.remove('active'));
+      progressBar.value           = 0;
+      progressText.textContent    = `0 / ${words.length} words`;
+    }
+
+
+    // ── 10. Restart ───────────────────────────────────────
+    function restartSpeech() {
+      currentWord = 0;
+      speakFrom(0);
+    }
+
+
+    // ── 11. Click a word to seek ──────────────────────────
+    // Called when user clicks on any word in the reading panel
+    function seekToWord(index) {
+      currentWord = index;
+      speakFrom(index);
+    }
+
+
+    // ── 12. Icon helpers ──────────────────────────────────
+    function showPlayIcon()  { iconPlay.style.display = 'block'; iconPause.style.display = 'none';  }
+    function showPauseIcon() { iconPlay.style.display = 'none';  iconPause.style.display = 'block'; }
+
+
+    // ── 13. Slider live updates ───────────────────────────
+    speedSlider.addEventListener('input', () => {
+      speedVal.textContent = parseFloat(speedSlider.value).toFixed(1) + '×';
+      saveState();
+      // If currently speaking, restart from current word with new rate
+      if (isPlaying) speakFrom(currentWord);
+    });
+
+    pitchSlider.addEventListener('input', () => {
+      pitchVal.textContent = parseFloat(pitchSlider.value).toFixed(1);
+      saveState();
+      if (isPlaying) speakFrom(currentWord);
+    });
+
+    languageSelect.addEventListener('change', () => {
+      updateVoiceOptions();
+      saveState();
+      if (isPlaying) speakFrom(currentWord);
+    });
+    voiceSelect.addEventListener('change', () => {
+      savedVoiceURI = voiceSelect.value;
+      saveState();
+      if (isPlaying) speakFrom(currentWord);
+    });
+    userText.addEventListener('input', saveState);
+
+    // ── 14. Load user's custom text ───────────────────────
+    function loadUserText() {
+      const inputVal = userText.value.trim();
+      if (!inputVal) {
+        alert('Please paste some text or open a .txt file first!');
+        return;
+      }
+
+      stopSpeech();
+      textDisplay.textContent = inputVal;
+      buildWordSpans();
+      saveState();
+      speakFrom(0);
+    }
+
+    btnLoad.addEventListener('click', loadUserText);
+
+    fileInput.addEventListener('change', async () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      if (!file.name.toLowerCase().endsWith('.txt') && file.type !== 'text/plain') {
+        alert('Please choose a .txt file.');
+        fileInput.value = '';
+        return;
+      }
+
+      try {
+        userText.value = await file.text();
+        userText.dispatchEvent(new Event('input'));
+      } catch (error) {
+        console.error('Unable to read text file:', error);
+        alert('Could not read that file. Please try another .txt file.');
+      }
+    });
+
+    btnClear.addEventListener('click', () => {
+      userText.value = '';
+      saveState();
+    });
+
+
+    // ── 15. Button event listeners ────────────────────────
+    btnPlay.addEventListener('click', togglePlay);
+    btnStop.addEventListener('click', stopSpeech);
+    btnRestart.addEventListener('click', restartSpeech);
+
+
+    // ── 16. Keyboard shortcuts ────────────────────────────
+    document.addEventListener('keydown', (e) => {
+      // Don't fire shortcuts when user is typing in textarea
+      if (document.activeElement === userText) return;
+
+      switch(e.key) {
+        case ' ':
+          e.preventDefault();     // stop page from scrolling on spacebar
+          togglePlay();
+          break;
+        case 's':
+        case 'S':
+          stopSpeech();
+          break;
+        case 'r':
+        case 'R':
+          restartSpeech();
+          break;
+        case 'ArrowUp':
+          // Speed up by 0.1
+          speedSlider.value = Math.min(2, parseFloat(speedSlider.value) + 0.1);
+          speedSlider.dispatchEvent(new Event('input'));
+          break;
+        case 'ArrowDown':
+          // Slow down by 0.1
+          speedSlider.value = Math.max(0.5, parseFloat(speedSlider.value) - 0.1);
+          speedSlider.dispatchEvent(new Event('input'));
+          break;
+      }
+    });
+
+
+    // ── 17. Init: restore saved state and build word spans ─
+    buildWordSpans();
+
+  </script>
+
+</body>
+</html>
