@@ -16,7 +16,7 @@
     "noUnusedParameters": true,
     "noImplicitAny": true,
     "noFallthroughCasesInSwitch": true,
-    "types": ["vite/client", "vite-plugin-pwa/client", "vitest/globals"]
+    "types": ["vite/client", "vite-plugin-pwa/client", "vitest/globals", "node"]
   },
-  "include": ["src", "api", "tests"]
+  "include": ["src", "api", "server", "server.ts", "scripts", "tests"]
 }

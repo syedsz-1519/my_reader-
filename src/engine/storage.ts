@@ -5,10 +5,13 @@ export const STORAGE_KEY = 'tts_v1';
 export type ThemeMode = 'light' | 'dark' | 'sepia' | 'system';
 export type ReaderFont = 'literata' | 'inter' | 'opendyslexic';
 
+export type PronunciationMatchMode = 'case-insensitive' | 'exact' | 'regex';
+
 export interface PronunciationRule {
   id: string;
   pattern: string;
   replacement: string;
+  matchMode?: PronunciationMatchMode;
   caseSensitive?: boolean;
   wholeWord?: boolean;
 }
@@ -50,6 +53,12 @@ export interface PersistedReaderState {
   remoteFormat: 'mp3' | 'wav' | 'opus' | 'flac';
   remoteRememberKey: boolean;
   remoteApiKey: string;
+  googleCloudConsentGranted: boolean;
+  googleLanguageCode: string;
+  googleVoice: string;
+  largeControls: boolean;
+  desktopLibraryOpen: boolean;
+  desktopSettingsOpen: boolean;
 }
 
 export const DEFAULT_SAMPLE_TEXT = `Welcome to your calm reading space. Everything runs in your browser, so no text leaves your device unless you choose an external voice server or web importer.
@@ -93,6 +102,12 @@ export const DEFAULT_PERSISTED_STATE: PersistedReaderState = {
   remoteFormat: 'wav',
   remoteRememberKey: false,
   remoteApiKey: '',
+  googleCloudConsentGranted: false,
+  googleLanguageCode: 'en-US',
+  googleVoice: 'en-US-Standard-C',
+  largeControls: false,
+  desktopLibraryOpen: true,
+  desktopSettingsOpen: true,
 };
 
 export function loadPersistedState(): PersistedReaderState {
@@ -131,6 +146,18 @@ export function loadPersistedState(): PersistedReaderState {
       remoteApiKey: parsed.remoteRememberKey && typeof parsed.remoteApiKey === 'string'
         ? parsed.remoteApiKey
         : '',
+      googleCloudConsentGranted: parsed.googleCloudConsentGranted === true,
+      googleLanguageCode:
+        typeof parsed.googleLanguageCode === 'string' && parsed.googleLanguageCode.trim()
+          ? parsed.googleLanguageCode
+          : 'en-US',
+      googleVoice:
+        typeof parsed.googleVoice === 'string' && parsed.googleVoice.trim()
+          ? parsed.googleVoice
+          : 'en-US-Standard-C',
+      largeControls: parsed.largeControls === true,
+      desktopLibraryOpen: parsed.desktopLibraryOpen !== false,
+      desktopSettingsOpen: parsed.desktopSettingsOpen !== false,
     };
   } catch {
     return { ...DEFAULT_PERSISTED_STATE };

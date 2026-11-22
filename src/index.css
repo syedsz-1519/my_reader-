@@ -1,0 +1,249 @@
+@import 'tailwindcss';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/700.css';
+@import '@fontsource/literata/400.css';
+@import '@fontsource/literata/400-italic.css';
+@import '@fontsource/literata/600.css';
+@import '@fontsource/opendyslexic/400.css';
+@import '@fontsource/opendyslexic/700.css';
+@import './styles/tokens.css';
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    font-family: var(--font-ui);
+    background-color: var(--bg);
+    color: var(--text);
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    min-height: 100svh;
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: var(--fs-md);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    transition:
+      background-color var(--dur-base) var(--ease),
+      color var(--dur-base) var(--ease);
+    overflow-x: clip;
+  }
+
+  button,
+  a,
+  select,
+  input,
+  textarea,
+  [role='button'],
+  [role='slider'] {
+    touch-action: manipulation;
+  }
+
+  /* Prevent automatic iOS Safari zoom on focused inputs */
+  @media (max-width: 767px) {
+    input:not([type='range']):not([type='checkbox']):not([type='radio']),
+    textarea,
+    select {
+      font-size: 16px;
+    }
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
+  }
+}
+
+/* Fluid Reader typography & highlighting */
+.reader-prose {
+  font-family: var(--font-reader);
+  font-size: var(--read-size-fluid);
+  line-height: var(--read-lh);
+  max-width: var(--read-measure);
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.reader-prose p,
+.reader-prose h2 {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 96px;
+}
+
+.reader-heading {
+  font-family: var(--font-reader);
+  font-size: clamp(21px, calc(var(--read-size-fluid) * 1.32), 34px);
+  line-height: 1.28;
+  font-weight: 600;
+  color: var(--text);
+  text-wrap: balance;
+}
+
+.sentence-span {
+  border-radius: var(--r-sm);
+  padding-block: 3px;
+  padding-inline: 2px;
+  cursor: pointer;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: background-color var(--dur-base) var(--ease);
+}
+
+@media (hover: hover) {
+  .sentence-span:hover {
+    background-color: var(--surface-2);
+  }
+}
+
+.sentence-span.is-active {
+  background-color: var(--hl-sentence);
+}
+
+.sentence-span.is-paused {
+  opacity: 0.72;
+}
+
+.word-span {
+  border-radius: 4px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.word-span.is-active-word {
+  background-color: var(--hl-word-bg);
+  color: var(--hl-word-fg);
+  font-weight: 600;
+}
+
+/* Reading ruler overlay band */
+.reading-ruler-active {
+  background-color: var(--surface-2);
+  border-radius: var(--r-sm);
+}
+
+/* Focus mode dims inactive paragraphs */
+.focus-dimmed {
+  opacity: 0.35;
+  transition: opacity var(--dur-base) var(--ease);
+}
+
+/* 3-bar CSS equalizer */
+@keyframes eq-bounce {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.eq-bar {
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background-color: var(--accent);
+  transform-origin: bottom;
+  animation: eq-bounce 900ms var(--ease) infinite;
+}
+
+.eq-bar:nth-child(2) {
+  animation-delay: 200ms;
+}
+
+.eq-bar:nth-child(3) {
+  animation-delay: 420ms;
+}
+
+.eq-bar.is-paused {
+  animation-play-state: paused;
+  transform: scaleY(0.4);
+}
+
+/* Theme transitions & sheet containment */
+.theme-surface {
+  background-color: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+  transition:
+    background-color var(--dur-base) var(--ease),
+    color var(--dur-base) var(--ease);
+}
+
+.sheet-contain {
+  overscroll-behavior: contain;
+}
+
+/* Safe area padding for mobile */
+.pb-safe {
+  padding-bottom: max(var(--s-2), env(safe-area-inset-bottom));
+}
+
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+.px-safe {
+  padding-left: max(var(--s-4), env(safe-area-inset-left));
+  padding-right: max(var(--s-4), env(safe-area-inset-right));
+}
+
+/* Landscape phone optimization: hide header & condense chrome */
+@media (max-height: 480px) and (max-width: 920px) {
+  .mobile-landscape-hide {
+    display: none !important;
+  }
+}
+
+/* Custom thin scrollbars on pointer-fine desktop */
+@media (pointer: fine) {
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--text-soft) 30%, transparent);
+    border-radius: var(--r-full);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--text-soft) 50%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  .eq-bar {
+    animation: none !important;
+    transform: scaleY(0.65);
+  }
+}

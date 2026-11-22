@@ -1,6 +1,6 @@
 export type TtsState = 'idle' | 'loading' | 'speaking' | 'paused' | 'error';
 
-export type ProviderId = 'webspeech' | 'kokoro' | 'piper' | 'remote';
+export type ProviderId = 'webspeech' | 'kokoro' | 'piper' | 'remote' | 'google';
 
 export type TtsErrorCode =
   | 'not-allowed'

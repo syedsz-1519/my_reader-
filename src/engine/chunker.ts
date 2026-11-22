@@ -21,8 +21,8 @@ const DEFAULT_HARD_MAX = 300;
 const ABBREVIATION_RE =
   /\b(?:Dr|Mr|Mrs|Ms|Prof|Sr|Jr|Rev|St|Lt|Capt|Col|Gen|Sgt|Gov|Pres|Sen|Rep|Hon|Ph\.D|M\.D|B\.A|M\.A|e\.g|i\.e|etc|vs|Fig|Eq|Vol|No|approx|est|Inc|Ltd|Corp|Co|Jan|Feb|Mar|Apr|Aug|Sept|Oct|Nov|Dec|U\.S|U\.K|a\.m|p\.m)\.\s*$/i;
 
-const RTL_CHAR_RE = /[\u0591-\u07FF\u200F\u202B\u202E\uFB1D-\uFDFD\uFE70-\uFEFC]/;
-const LTR_CHAR_RE = /[A-Za-z\u00C0-\u024F\u0900-\u097F\u0C00-\u0C7F]/;
+const RTL_CHAR_RE = /\p{Script=Arabic}|\p{Script=Hebrew}/u;
+const LTR_CHAR_RE = /\p{Script=Latin}|\p{Script=Devanagari}|\p{Script=Telugu}/u;
 
 export function detectParagraphDirection(text: string): 'ltr' | 'rtl' | 'auto' {
   for (const ch of text) {
@@ -57,24 +57,36 @@ export function splitIntoSentences(paragraph: string, locale = 'en'): string[] {
   const trimmed = paragraph.trim();
   if (!trimmed) return [];
 
+  // Mask URLs so dots inside domains/paths never trigger false sentence breaks
+  const urlPlaceholders: string[] = [];
+  const masked = trimmed.replace(/\b(?:https?:\/\/|www\.)[^\s<>()]+/gi, (match) => {
+    const token = `__TTS_URL_${urlPlaceholders.length}__`;
+    urlPlaceholders.push(match);
+    return token;
+  });
+
+  const restoreUrls = (text: string): string =>
+    text.replace(/__TTS_URL_(\d+)__/g, (_, idx) => urlPlaceholders[Number(idx)] ?? '');
+
   let rawSegments: string[] = [];
 
   if (typeof Intl !== 'undefined' && 'Segmenter' in Intl) {
     try {
       const segmenter = new Intl.Segmenter(locale, { granularity: 'sentence' });
-      for (const part of segmenter.segment(trimmed)) {
+      for (const part of segmenter.segment(masked)) {
         const s = part.segment.trim();
         if (s) rawSegments.push(s);
       }
     } catch {
-      rawSegments = regexSentenceSplit(trimmed);
+      rawSegments = regexSentenceSplit(masked);
     }
   } else {
-    rawSegments = regexSentenceSplit(trimmed);
+    rawSegments = regexSentenceSplit(masked);
   }
 
   if (rawSegments.length <= 1) {
-    return rawSegments.length === 1 ? rawSegments : [trimmed];
+    const single = rawSegments.length === 1 ? restoreUrls(rawSegments[0]) : trimmed;
+    return [single];
   }
 
   // Re-stitch false splits at known abbreviations or single initials (e.g. "J. R. R.")
@@ -83,7 +95,7 @@ export function splitIntoSentences(paragraph: string, locale = 'en'): string[] {
     if (merged.length > 0) {
       const prev = merged[merged.length - 1];
       const endsWithAbbrev = ABBREVIATION_RE.test(prev) || /\b[A-Z]\.$/.test(prev);
-      const startsLowerOrDigit = /^[a-z0-9(\["']/.test(seg);
+      const startsLowerOrDigit = /^[a-z0-9(["']/.test(seg);
       const prevEndsDecimal = /\d\.$/.test(prev) && /^\d/.test(seg);
 
       if (prevEndsDecimal || (endsWithAbbrev && (startsLowerOrDigit || /^[A-Z]/.test(seg)))) {
@@ -94,7 +106,7 @@ export function splitIntoSentences(paragraph: string, locale = 'en'): string[] {
     merged.push(seg);
   }
 
-  return merged;
+  return merged.map(restoreUrls);
 }
 
 function regexSentenceSplit(text: string): string[] {
